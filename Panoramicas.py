@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 import pandas as pd
-
+#nueva mejora
 # --- CONFIGURACIÓN ---
 carpeta_base = r"C:\Users\ANGEL GOMEZ\OneDrive\Documentos\BC-163-02\S2C2"
 carpeta_salida_base = r"C:\Users\ANGEL GOMEZ\Proyectos\Proyecto_semic\Correccion_final"
