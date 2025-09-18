@@ -9,7 +9,7 @@ import time
 
 # --- CONFIGURACIÓN ---
 # Cambia esta ruta por cualquiera de tus carpetas base:
-carpeta_base = r"C:\Users\ANGEL GOMEZ\OneDrive\Documentos\SEC767-01\S1C1"
+carpeta_base = r"C:\Users\ANGEL GOMEZ\OneDrive\Documentos\SEC334-G10\S1C1"
 carpeta_salida_base = r"C:\Users\ANGEL GOMEZ\Proyectos\Proyecto_semic\Correccion_final"
 
 # CONFIGURACIÓN DE PARALELIZACIÓN
@@ -89,7 +89,7 @@ def procesar_extremadamente_oscura(img):
     lab = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))  # Tiles más grandes
+    clahe = cv2.createCLAHE(clipLimit=0.9, tileGridSize=(8, 8))  # Tiles más grandes
     l = clahe.apply(l)
     
     img_procesada = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
@@ -104,16 +104,16 @@ def procesar_extremadamente_oscura(img):
     
     v_float = v.astype(np.float32)
     # Factor más agresivo pero aplicado gradualmente
-    v_float = v_float + mask_suave * (v_float * 0.8)  # Aumentar 80% gradualmente
+    v_float = v_float + mask_suave * (v_float * 0.25)  # Aumentar 80% gradualmente
     v = np.clip(v_float, 0, 255).astype(np.uint8)
     
     img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
     
     # 4. Gamma correction específica para extremos
-    img_procesada = ajustar_gamma(img_procesada, gamma=0.4)  # Más agresivo para extremos
+    img_procesada = ajustar_gamma(img_procesada, gamma=1.1)  # Más agresivo para extremos
     
     # 5. Reducción de ruido final
-    img_procesada = cv2.bilateralFilter(img_procesada, d=5, sigmaColor=15, sigmaSpace=15)
+    img_procesada = cv2.bilateralFilter(img_procesada, d=8, sigmaColor=15, sigmaSpace=15)
     
     # 6. Saturación muy conservadora
     hsv = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2HSV)
@@ -146,7 +146,7 @@ def procesar_muy_oscura(img):
     img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
     
     # 3. Gamma suave
-    img_procesada = ajustar_gamma(img_procesada, gamma=0.7)
+    img_procesada = ajustar_gamma(img_procesada, gamma=1.0)
     
     # 4. Saturación moderada
     hsv = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2HSV)
@@ -222,17 +222,29 @@ def procesar_imagen_avanzado_optimizado_v2(img, modo="normal"):
         img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
         
     elif modo == "clara":
-        # Parámetros para imágenes claras
+        # CLAHE adaptativo
         img_procesada, brillo, clip, tiles = aplicar_clahe_adaptativo_v2(img, modo="clara")
+    
+        # Reducción de ruido
         img_procesada = reducir_ruido(img_procesada)
-        img_procesada = reducir_highlights(img_procesada, threshold=200, factor=0.75)
+
+        # Ajuste gamma suave
         img_procesada = ajustar_gamma(img_procesada, gamma=0.95)
-        
-        # Saturación normal para claras
+
+        # Ajuste de saturación
         hsv = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(hsv)
         s = np.clip(s * 1.1, 0, 255).astype(np.uint8)
+
+        # Reducción de highlights extremos
+        mask_clara = (v > 240).astype(np.float32)
+        mask_clara_suave = cv2.GaussianBlur(mask_clara, (15, 15), 8)
+        v_float = v.astype(np.float32)
+        v_float = v_float - mask_clara_suave * ((v_float - 240) * 0.7)
+        v = np.clip(v_float, 0, 255).astype(np.uint8)
+
         img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
+
         
     else:  # normal
         # Parámetros equilibrados
