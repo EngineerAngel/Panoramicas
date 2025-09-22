@@ -7,10 +7,15 @@ import multiprocessing
 from functools import partial
 import time
 
+
 # --- CONFIGURACIÓN ---
 # Cambia esta ruta por cualquiera de tus carpetas base:
-carpeta_base = r"C:\Users\ANGEL GOMEZ\OneDrive\Documentos\SEC334-G10\S1C1"
+carpeta_base = r"C:\Users\ANGEL GOMEZ\OneDrive\Documentos\BC-163-02\S2C2"
 carpeta_salida_base = r"C:\Users\ANGEL GOMEZ\Proyectos\Proyecto_semic\Correccion_final"
+
+
+
+   
 
 # CONFIGURACIÓN DE PARALELIZACIÓN
 NUM_PROCESOS = min(8, multiprocessing.cpu_count())  # Máximo 8 procesos o el número de CPUs
@@ -240,7 +245,7 @@ def procesar_imagen_avanzado_optimizado_v2(img, modo="normal"):
         mask_clara = (v > 240).astype(np.float32)
         mask_clara_suave = cv2.GaussianBlur(mask_clara, (15, 15), 8)
         v_float = v.astype(np.float32)
-        v_float = v_float - mask_clara_suave * ((v_float - 240) * 0.7)
+        v_float = v_float - mask_clara_suave * ((v_float - 240) * 0.6)
         v = np.clip(v_float, 0, 255).astype(np.uint8)
 
         img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
