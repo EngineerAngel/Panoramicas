@@ -50,24 +50,64 @@ def procesar_extremadamente_oscura(img):
 
     return img_procesada
 
+def ajustar_saturacion_adaptativa(img, factor_base=1.35):
+    """
+    Valores originales de saturación en diferentes modos:
+    - Extremadamente oscura: s * 1.1
+    - Muy oscura: s * 1.15
+    - Normal: s * 1.2
+    - Clara: s * 1.1
+    
+    Nuevos valores base aumentados:
+    - Base: 1.35 (antes 1.15)
+    - Desaturada: * 1.4 (antes 1.3)
+    - Moderada: * 1.2 (antes 1.1)
+    """
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    # Calcular factor adaptativo basado en la saturación promedio actual
+    sat_promedio = np.mean(s)
+    if sat_promedio < 50:
+        factor = factor_base * 1.4  # Más saturación para imágenes desaturadas
+    elif sat_promedio < 100:
+        factor = factor_base * 1.2  # Saturación moderada
+    else:
+        factor = factor_base  # Mantener factor base para imágenes ya saturadas
+    
+    # Aplicar saturación con máscara de luminosidad
+    mask_oscura = (v < 30).astype(np.float32)
+    mask_clara = (v > 225).astype(np.float32)
+    mask_media = 1 - mask_oscura - mask_clara
+    
+    # Ajustar saturación según la luminosidad
+    s_float = s.astype(np.float32)
+    s_ajustada = np.clip(s_float * factor * mask_media + 
+                        s_float * (factor * 0.7) * mask_oscura +
+                        s_float * (factor * 0.8) * mask_clara, 0, 255)
+    
+    s = s_ajustada.astype(np.uint8)
+    return cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
+
 def procesar_muy_oscura(img):
+    """
+    Valores originales:
+    - CLAHE: clipLimit=2.5, tileGridSize=(12, 12)
+    - Levantar sombras: threshold=60, factor=1.4
+    - Gamma: 1.0
+    - Saturación: s * 1.15
+    """
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(12, 12))
     l = clahe.apply(l)
     img_procesada = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
-    hsv = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-    mask = v < 60
-    v_float = v.astype(np.float32)
-    v_float[mask] = np.clip(v_float[mask] * 1.4, 0, 255)
-    v = v_float.astype(np.uint8)
-    img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
+    
+    # Usar nuevas funciones adaptativas
+    img_procesada = levantar_sombras_v2(img_procesada, threshold=70, factor=1.2)
     img_procesada = ajustar_gamma(img_procesada, gamma=1.0)
-    hsv = cv2.cvtColor(img_procesada, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-    s = np.clip(s * 1.15, 0, 255).astype(np.uint8)
-    img_procesada = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
+    img_procesada = ajustar_saturacion_adaptativa(img_procesada, factor_base=1.4)  # Valores nuevos aumentados
+    
     return img_procesada
 
 def aplicar_clahe_adaptativo_v2(img, modo="normal"):
@@ -94,14 +134,33 @@ def aplicar_clahe_adaptativo_v2(img, modo="normal"):
     return img_result, brillo, clip, tiles
 
 def levantar_sombras_v2(img, threshold=60, factor=1.08):
+    """
+    Valores originales:
+    - threshold=60
+    - factor=1.08
+    - gamma=0.85 (para brillo_promedio < 30)
+    """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
     brillo_promedio = np.mean(v)
+    
+    # Ajuste adaptativo del factor según el brillo promedio
+    if brillo_promedio < 30:
+        factor = max(factor * 1.5, 1.3)  # Factor más agresivo para muy oscuras
+    elif brillo_promedio < 50:
+        factor = max(factor * 1.3, 1.2)  # Factor moderado para oscuras
+    else:
+        factor = max(factor, 1.02)  # Mantener el mínimo original
+        
     mask = v < threshold
-    factor_final = max(factor, 1.02)
     v_float = v.astype(np.float32)
-    v_float[mask] = np.clip(v_float[mask] * factor_final, 0, 255)
-    v = v_float.astype(np.uint8)
+    v_float[mask] = np.clip(v_float[mask] * factor, 0, 255)
+    
+    # Suavizado de la transición
+    mask_float = mask.astype(np.float32)
+    mask_suave = cv2.GaussianBlur(mask_float, (5, 5), 1.5)
+    v = np.clip(v_float * mask_suave + v * (1 - mask_suave), 0, 255).astype(np.uint8)
+    
     img_sombras = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
     if brillo_promedio < 30:
         img_sombras = ajustar_gamma(img_sombras, gamma=0.85)
@@ -144,6 +203,13 @@ def procesar_imagen_avanzado_optimizado_v2(img, modo="normal"):
     return img_procesada, brillo
 
 def procesar_segun_clasificacion(img, clasificacion):
+    """
+    Procesa una imagen según su clasificación.
+    
+    Args:
+        img: Imagen a procesar
+        clasificacion: Tipo de clasificación de la imagen
+    """
     if clasificacion == "EXTREMADAMENTE_OSCURA":
         img_procesada = procesar_extremadamente_oscura(img)
         brillo = np.mean(cv2.cvtColor(img_procesada, cv2.COLOR_BGR2GRAY))
